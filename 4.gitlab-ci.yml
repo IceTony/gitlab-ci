@@ -1,0 +1,49 @@
+stages:
+  - build
+  - package
+  - deploy
+
+build:
+  image: golang:alpine
+  stage: build
+  tags:
+    - docker
+  before_script:
+    - apk add git
+    - export GOPATH=$CI_PROJECT_DIR
+    - go get -d
+  script: go build api.go
+  cache:
+    paths:
+      - src/
+  artifacts:
+    paths:
+      - api
+    expire_in: 20 minutes
+
+package:
+  image: ruby:2.6
+  stage: package
+  tags:
+    - docker
+  before_script:
+    - gem install --no-document fpm
+    - apt update && apt install -y rpm
+  script:
+    - fpm -s dir -t deb -n qa-api-testing -v $CI_PIPELINE_IID --prefix /opt/qa-api-testing-$CI_PIPELINE_IID api
+    - fpm -s dir -t rpm -n qa-api-testing -v $CI_PIPELINE_IID --prefix /opt/qa-api-testing-$CI_PIPELINE_IID api
+  artifacts:
+    paths:
+      - qa-api-testing_${CI_PIPELINE_IID}_amd64.deb
+      - qa-api-testing-${CI_PIPELINE_IID}-1.x86_64.rpm
+
+deploy:
+  image: ruby:2.7
+  stage: deploy
+  tags:
+    - icetony2
+  before_script:
+    - gem install package_cloud
+  script:
+    - package_cloud push icetony/rebrain/ubuntu/bionic qa-api-testing_${CI_PIPELINE_IID}_amd64.deb
+    - package_cloud push icetony/rebrain/el/7 qa-api-testing-${CI_PIPELINE_IID}-1.x86_64.rpm
