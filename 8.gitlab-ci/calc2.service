@@ -1,0 +1,11 @@
+[Unit]
+Description=Calc2
+After=multi-user.target
+
+[Service]
+Type=idle
+ExecStart=/usr/bin/python3 /opt/calc2/calc2.py
+Restart=always
+
+[Install]
+WantedBy=multi-user.target

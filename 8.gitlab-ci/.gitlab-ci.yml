@@ -1,0 +1,230 @@
+stages:
+  - verify
+  - deploy
+  - test
+  - stop
+
+lint_and_unit_tests:
+  image: python:3.7.3-slim-stretch
+  stage: verify
+  before_script:
+    - pip install -r requirements.txt
+    - pip install pylint
+  script:
+    - pylint --errors-only lib/calc.py lib/db.py calc2.py tests/unit_test.py
+    - python tests/unit_test.py
+
+deploy_to_dev1:
+  image: alpine:latest
+  stage: deploy
+  before_script:
+    - 'which ssh-agent || ( apk add openssh-client )'
+    - eval $(ssh-agent -s)
+    - mkdir -p ~/.ssh
+    - echo "$SSH_PRIVATE_KEY" > ~/.ssh/id_rsa
+    - chmod -R 700 ~/.ssh
+    - ssh-add ~/.ssh/id_rsa
+    - echo "$SSH_KNOWN_HOSTS_DEV1" > ~/.ssh/known_hosts
+    - chmod 644 ~/.ssh/known_hosts
+  script:
+    - ssh ${DEPLOY_USER}@${DEV1_HOST} service calc2 stop
+    - ssh ${DEPLOY_USER}@${DEV1_HOST} rm -rf /opt/calc2/*
+    - scp -r lib/ templates/ calc2.py requirements.txt ${DEPLOY_USER}@${DEV1_HOST}:/opt/calc2/
+    - ssh ${DEPLOY_USER}@${DEV1_HOST} pip3 install -r /opt/calc2/requirements.txt
+    - ssh ${DEPLOY_USER}@${DEV1_HOST} service calc2 start
+  environment:
+    name: dev1
+    url: http://icetony.devops.rebrain.srwx.net
+    on_stop: stop_dev1
+  when: manual
+
+deploy_to_dev2:
+  image: alpine:latest
+  stage: deploy
+  before_script:
+    - 'which ssh-agent || ( apk add openssh-client )'
+    - eval $(ssh-agent -s)
+    - mkdir -p ~/.ssh
+    - echo "$SSH_PRIVATE_KEY" > ~/.ssh/id_rsa
+    - chmod -R 700 ~/.ssh
+    - ssh-add ~/.ssh/id_rsa
+    - echo "$SSH_KNOWN_HOSTS_DEV2" > ~/.ssh/known_hosts
+    - chmod 644 ~/.ssh/known_hosts
+  script:
+    - ssh ${DEPLOY_USER}@${DEV2_HOST} service calc2 stop
+    - ssh ${DEPLOY_USER}@${DEV2_HOST} rm -rf /opt/calc2/*
+    - scp -r lib/ templates/ calc2.py requirements.txt ${DEPLOY_USER}@${DEV2_HOST}:/opt/calc2/
+    - ssh ${DEPLOY_USER}@${DEV2_HOST} pip3 install -r /opt/calc2/requirements.txt
+    - ssh ${DEPLOY_USER}@${DEV2_HOST} service calc2 start
+  environment:
+    name: dev2
+    url: http://icetony2.devops.rebrain.srwx.net
+    on_stop: stop_dev2
+  when: manual
+
+deploy_mr:
+  image: alpine:latest
+  stage: deploy
+  before_script:
+    - 'which ssh-agent || ( apk add openssh-client )'
+    - eval $(ssh-agent -s)
+    - mkdir -p ~/.ssh
+    - echo "$SSH_PRIVATE_KEY" > ~/.ssh/id_rsa
+    - chmod -R 700 ~/.ssh
+    - ssh-add ~/.ssh/id_rsa
+    - echo "$SSH_KNOWN_HOSTS_DEV2" > ~/.ssh/known_hosts
+    - chmod 644 ~/.ssh/known_hosts
+  script:
+    - ssh ${DEPLOY_USER}@${DEV2_HOST} service calc2 stop
+    - ssh ${DEPLOY_USER}@${DEV2_HOST} rm -rf /opt/calc2/*
+    - scp -r lib/ templates/ calc2.py requirements.txt ${DEPLOY_USER}@${DEV2_HOST}:/opt/calc2/
+    - ssh ${DEPLOY_USER}@${DEV2_HOST} pip3 install -r /opt/calc2/requirements.txt
+    - ssh ${DEPLOY_USER}@${DEV2_HOST} service calc2 start
+  environment:
+    name: dev2
+    url: http://icetony2.devops.rebrain.srwx.net
+    on_stop: stop_dev2
+  only:
+    - merge_requests
+  except:
+    - branches
+
+deploy_to_prod:
+  image: alpine:latest
+  stage: deploy
+  before_script:
+    - 'which ssh-agent || ( apk add openssh-client )'
+    - eval $(ssh-agent -s)
+    - mkdir -p ~/.ssh
+    - echo "$SSH_PRIVATE_KEY" > ~/.ssh/id_rsa
+    - chmod -R 700 ~/.ssh
+    - ssh-add ~/.ssh/id_rsa
+    - echo "$SSH_KNOWN_HOSTS_PROD" > ~/.ssh/known_hosts
+    - chmod 644 ~/.ssh/known_hosts
+  script:
+    - ssh ${DEPLOY_USER}@${PROD_HOST} service calc2 stop
+    - ssh ${DEPLOY_USER}@${PROD_HOST} rm -rf /opt/calc2/*
+    - scp -r lib/ templates/ calc2.py requirements.txt ${DEPLOY_USER}@${PROD_HOST}:/opt/calc2/
+    - ssh ${DEPLOY_USER}@${PROD_HOST} pip3 install -r /opt/calc2/requirements.txt
+    - ssh ${DEPLOY_USER}@${PROD_HOST} service calc2 start
+  environment:
+    name: prod
+    url: http://icetony-prod.devops.rebrain.srwx.net
+  only:
+    - tags
+  except:
+    - branches
+
+stop_dev1:
+  image: alpine:latest
+  stage: stop
+  variables:
+    GIT_STRATEGY: none
+  before_script:
+    - 'which ssh-agent || ( apk add openssh-client )'
+    - eval $(ssh-agent -s)
+    - mkdir -p ~/.ssh
+    - echo "$SSH_PRIVATE_KEY" > ~/.ssh/id_rsa
+    - chmod -R 700 ~/.ssh
+    - ssh-add ~/.ssh/id_rsa
+    - echo "$SSH_KNOWN_HOSTS_DEV1" > ~/.ssh/known_hosts
+    - chmod 644 ~/.ssh/known_hosts
+  script:
+    - ssh ${DEPLOY_USER}@${DEV1_HOST} service calc2 stop
+  environment:
+    name: dev1
+    action: stop
+  when: manual
+
+stop_dev2:
+  image: alpine:latest
+  stage: stop
+  variables:
+    GIT_STRATEGY: none
+  before_script:
+    - 'which ssh-agent || ( apk add openssh-client )'
+    - eval $(ssh-agent -s)
+    - mkdir -p ~/.ssh
+    - echo "$SSH_PRIVATE_KEY" > ~/.ssh/id_rsa
+    - chmod -R 700 ~/.ssh
+    - ssh-add ~/.ssh/id_rsa
+    - echo "$SSH_KNOWN_HOSTS_DEV2" > ~/.ssh/known_hosts
+    - chmod 644 ~/.ssh/known_hosts
+  script:
+    - ssh ${DEPLOY_USER}@${DEV2_HOST} service calc2 stop
+  environment:
+    name: dev2
+    action: stop
+  when: manual
+
+test_dev1:
+  image: golang:alpine
+  stage: test
+  variables:
+    GIT_STRATEGY: none
+  before_script:
+    - apk add git curl apache2-utils
+    - go get github.com/ericchiang/pup
+  script:
+    - echo "Smoke testing"
+    - curl -o /dev/null -s -w "%{http_code}\n" ${DEV1_HOST} | grep -q 200
+    - echo "API, Integration and Interface testing"
+    - curl -s -d "operation=15,*,3" -X POST ${DEV1_HOST}/calc | pup 'pre#result' text{} | grep -q 45
+    - curl -s -d "operation=15,-,3" -X POST ${DEV1_HOST}/calc | pup 'pre#result' text{} | grep -q 12
+    - curl -s -d "operation=15,/,3" -X POST ${DEV1_HOST}/calc | pup 'pre#result' text{} | grep -q 5.0
+    - curl -s ${DEV1_HOST}/results_secret | pup 'tr:last-child td:last-child' text{} | grep -q 5
+    - curl -s -X POST ${DEV1_HOST}/cleanup | grep -q "Database cleared"
+    - echo "Load testing"
+    - ab -n 10000 -c 10 http://${DEV1_HOST}:80/
+  environment:
+    name: dev1
+  when: manual
+
+test_dev2:
+  image: golang:alpine
+  stage: test
+  variables:
+    GIT_STRATEGY: none
+  before_script:
+    - apk add git curl apache2-utils
+    - go get github.com/ericchiang/pup
+  script:
+    - echo "Smoke testing"
+    - curl -o /dev/null -s -w "%{http_code}\n" ${DEV2_HOST} | grep -q 200
+    - echo "API, Integration and Interface testing"
+    - curl -s -d "operation=15,*,3" -X POST ${DEV2_HOST}/calc | pup 'pre#result' text{} | grep -q 45
+    - curl -s -d "operation=15,-,3" -X POST ${DEV2_HOST}/calc | pup 'pre#result' text{} | grep -q 12
+    - curl -s -d "operation=15,/,3" -X POST ${DEV2_HOST}/calc | pup 'pre#result' text{} | grep -q 5.0
+    - curl -s ${DEV2_HOST}/results_secret | pup 'tr:last-child td:last-child' text{} | grep -q 5
+    - curl -s -X POST ${DEV2_HOST}/cleanup | grep -q "Database cleared"
+    - echo "Load testing"
+    - ab -n 10000 -c 10 http://${DEV2_HOST}:80/
+  environment:
+    name: dev2
+  when: manual
+
+test_prod:
+  image: golang:alpine
+  stage: test
+  variables:
+    GIT_STRATEGY: none
+  before_script:
+    - apk add git curl apache2-utils
+    - go get github.com/ericchiang/pup
+  script:
+    - echo "Smoke testing"
+    - curl -o /dev/null -s -w "%{http_code}\n" ${PROD_HOST} | grep -q 200
+    - echo "API, Integration and Interface testing"
+    - curl -s -d "operation=15,*,3" -X POST ${PROD_HOST}/calc | pup 'pre#result' text{} | grep -q 45
+    - curl -s -d "operation=15,-,3" -X POST ${PROD_HOST}/calc | pup 'pre#result' text{} | grep -q 12
+    - curl -s -d "operation=15,/,3" -X POST ${PROD_HOST}/calc | pup 'pre#result' text{} | grep -q 5.0
+    - curl -s ${PROD_HOST}/results_secret | pup 'tr:last-child td:last-child' text{} | grep -q 5
+    - curl -s -X POST ${PROD_HOST}/cleanup | grep -q "Database cleared"
+    - echo "Load testing"
+    - ab -n 10000 -c 10 http://${PROD_HOST}:80/
+  environment:
+    name: prod
+  only:
+    - tags
+  except:
+    - branches
